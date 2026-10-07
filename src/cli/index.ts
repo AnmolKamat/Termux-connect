@@ -84,7 +84,9 @@ export async function runCli(argv = process.argv.slice(2)): Promise<void> {
       } else if (subCmd === 'pair') {
         const host = cleanArgs[2];
         const port = cleanArgs[3] ? parseInt(cleanArgs[3], 10) : undefined;
-        await pairDeviceCommand(host, { port });
+        const userIdx = argv.findIndex((a) => a === '--user' || a === '-u');
+        const userFlag = userIdx !== -1 ? argv[userIdx + 1] : undefined;
+        await pairDeviceCommand(host, { port, user: userFlag });
       } else if (subCmd === 'remove' || subCmd === 'rm') {
         const id = cleanArgs[2];
         if (!id) {

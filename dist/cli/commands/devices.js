@@ -61,13 +61,20 @@ export async function pairDeviceCommand(host, options = {}) {
     if (!host) {
         host = await UI.prompt('Enter Android IP address');
     }
+    let user = options.user;
+    if (host.includes('@')) {
+        const parts = host.split('@');
+        user = parts[0];
+        host = parts[1];
+    }
     const port = options.port || 8022;
-    console.log(dim(`\nPairing with Android device at ${host}:${port}...`));
+    console.log(dim(`\nPairing with Android device at ${user ? `${user}@` : ''}${host}:${port}...`));
     console.log(dim(`Note: If prompted for password, enter your Termux password (run 'passwd' on your phone to set/change it).\n`));
     try {
         const device = await PairingManager.pairDevice({
             host,
             port,
+            user,
             name: options.name,
             onFingerprintPrompt: async (fingerprint, targetHost) => {
                 console.log(`\n${bold('SSH Host Fingerprint:')} ${cyan(fingerprint)}`);

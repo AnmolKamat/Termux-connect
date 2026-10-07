@@ -8,6 +8,7 @@ export declare function discoverDevicesCommand(options?: {
 export declare function pairDeviceCommand(host: string, options?: {
     port?: number;
     name?: string;
+    user?: string;
 }): Promise<void>;
 export declare function removeDeviceCommand(id: string): Promise<void>;
 //# sourceMappingURL=devices.d.ts.map
