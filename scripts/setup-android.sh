@@ -51,17 +51,30 @@ echo -e "${GREEN}[4/6] Installing android-sync-bridge agent...${RESET}"
 BRIDGE_DIR="$HOME/.android-sync-bridge"
 mkdir -p "$BRIDGE_DIR"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 
-if [ -f "$SCRIPT_DIR/package.json" ]; then
-    # Installed from cloned repo
-    echo -e "Copying bridge files from repository..."
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
+    # Running from cloned repo
+    echo -e "Copying bridge files from local repository ($SCRIPT_DIR)..."
     cp -r "$SCRIPT_DIR/dist" "$BRIDGE_DIR/" 2>/dev/null || true
     cp -r "$SCRIPT_DIR/bin" "$BRIDGE_DIR/" 2>/dev/null || true
     cp "$SCRIPT_DIR/package.json" "$BRIDGE_DIR/" 2>/dev/null || true
 else
-    # Standalone script install
-    echo -e "Setting up standalone bridge bundle..."
+    # Running via curl | bash
+    echo -e "Fetching android-sync from GitHub..."
+    REPO_DIR="$BRIDGE_DIR/repo"
+    rm -rf "$REPO_DIR"
+    git clone --depth 1 https://github.com/AnmolKamat/Termux-connect.git "$REPO_DIR"
+    cd "$REPO_DIR"
+    echo -e "Setting up runtime dependencies..."
+    npm install --omit=dev 2>/dev/null || npm install
+    npm run build 2>/dev/null || true
+    cp -r "$REPO_DIR/dist" "$BRIDGE_DIR/"
+    cp -r "$REPO_DIR/bin" "$BRIDGE_DIR/"
+    cp "$REPO_DIR/package.json" "$BRIDGE_DIR/"
 fi
 
 # Create global wrapper in $PREFIX/bin

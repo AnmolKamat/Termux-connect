@@ -61,12 +61,10 @@ On your Android device:
 1. Install **[Termux](https://f-droid.org/packages/com.termux/)** and **[Termux:API](https://f-droid.org/packages/com.termux.api/)** from F-Droid.
 2. Grant **Notification Access** to `Termux:API` in Android Settings:
    - *Android Settings → Apps → Special app access → Notification access → Termux:API (Toggle ON)*.
-3. Open Termux and run the automated setup script:
+3. Open Termux and run the one-line setup command:
 
 ```bash
-git clone https://github.com/anmolkamath/termux-connect.git
-cd termux-connect
-./scripts/setup-android.sh
+curl -sSL https://raw.githubusercontent.com/AnmolKamat/Termux-connect/main/scripts/setup-android.sh | bash
 ```
 
 The script will automatically:
@@ -79,15 +77,13 @@ The script will automatically:
 
 ### 2. macOS Setup
 
-On your Mac:
-1. Run the macOS installer script:
+On your Mac, install via the one-line installer command:
 
 ```bash
-cd termux-connect
-./scripts/install-mac.sh
+curl -sSL https://raw.githubusercontent.com/AnmolKamat/Termux-connect/main/scripts/install-mac.sh | bash
 ```
 
-This builds the TypeScript project, links `android-sync` globally, and initializes `~/.android-sync`.
+This sets up dependencies, builds the project, links `android-sync` globally, and initializes `~/.android-sync`.
 
 ---
 

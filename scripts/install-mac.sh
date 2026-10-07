@@ -31,8 +31,27 @@ fi
 NODE_VER=$(node -v)
 echo -e "Found Node.js ${BOLD}${NODE_VER}${RESET}"
 
-# 3. Build project
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 3. Resolve project source directory
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
+
+APP_DIR="$HOME/.android-sync/app"
+
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+else
+    echo -e "Downloading android-sync from GitHub..."
+    mkdir -p "$APP_DIR"
+    if [ -d "$APP_DIR/.git" ]; then
+        cd "$APP_DIR" && git pull --quiet
+    else
+        git clone --depth 1 https://github.com/AnmolKamat/Termux-connect.git "$APP_DIR"
+    fi
+    PROJECT_DIR="$APP_DIR"
+fi
+
 cd "$PROJECT_DIR"
 
 echo -e "\n${GREEN}[2/5] Building project TypeScript...${RESET}"
@@ -65,8 +84,15 @@ import('./dist/shared/config.js').then(({ PathManager }) => {
 
 # 6. Ask to install background LaunchAgent
 echo -e "\n${GREEN}[5/5] Background Service Setup...${RESET}"
-read -p "Would you like to install the background LaunchAgent for automatic syncing? (y/N): " -n 1 -r
-echo
+REPLY="n"
+if [ -t 0 ]; then
+    read -p "Would you like to install the background LaunchAgent for automatic syncing? (y/N): " -n 1 -r
+    echo
+elif [ -e /dev/tty ]; then
+    read -p "Would you like to install the background LaunchAgent for automatic syncing? (y/N): " -n 1 -r < /dev/tty
+    echo
+fi
+
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     "$TARGET_DIR/android-sync" service install
 fi
