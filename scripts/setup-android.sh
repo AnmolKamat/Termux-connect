@@ -1,9 +1,9 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # ==============================================================================
 # Android ↔ macOS Bridge — Termux Setup Script
 # ==============================================================================
-# This script sets up OpenSSH, Termux:API, Node.js, and installs the
-# android-sync-bridge daemon on your Android device via Termux.
+# Single-command setup for Android Termux:
+# curl -sSL https://raw.githubusercontent.com/AnmolKamat/Termux-connect/main/scripts/setup-android.sh | bash
 # ==============================================================================
 
 set -e
@@ -15,17 +15,19 @@ RED="\033[31m"
 BOLD="\033[1m"
 RESET="\033[0m"
 
-echo -e "${BOLD}${CYAN}=== Android ↔ macOS Bridge Setup (Termux) ===${RESET}\n"
+echo -e "\n${BOLD}${CYAN}=== Android ↔ macOS Bridge Setup (Termux) ===${RESET}\n"
 
 # 1. Verify Termux environment
-if [ -z "$PREFIX" ]; then
+if [ -z "$PREFIX" ] && [ ! -d "/data/data/com.termux/files/usr" ]; then
     echo -e "${RED}[ERROR] This script must be run inside Termux on Android.${RESET}"
     exit 1
 fi
 
-# 2. Update package repositories and install dependencies
-echo -e "${GREEN}[1/6] Installing required Termux packages (openssh, termux-api, nodejs)...${RESET}"
-pkg update -y
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+HOME="${HOME:-/data/data/com.termux/files/home}"
+
+# 2. Install required packages
+echo -e "${GREEN}[1/6] Installing required Termux packages (openssh, termux-api, nodejs, git)...${RESET}"
 pkg install -y openssh termux-api nodejs git
 
 # 3. Configure SSH server
@@ -35,11 +37,8 @@ chmod 700 "$HOME/.ssh"
 touch "$HOME/.ssh/authorized_keys"
 chmod 600 "$HOME/.ssh/authorized_keys"
 
-# Set SSH password if not set
-echo -e "${YELLOW}Note: If you have not set a Termux password yet, you can run 'passwd' to set one.${RESET}"
-
 # Start sshd if not running
-if ! pgrep -x "sshd" > /dev/null; then
+if ! pgrep -x "sshd" > /dev/null 2>&1; then
     echo -e "${GREEN}[3/6] Starting OpenSSH daemon on port 8022...${RESET}"
     sshd
 else
@@ -58,20 +57,27 @@ fi
 
 if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
     # Running from cloned repo
-    echo -e "Copying bridge files from local repository ($SCRIPT_DIR)..."
-    cp -r "$SCRIPT_DIR/dist" "$BRIDGE_DIR/" 2>/dev/null || true
-    cp -r "$SCRIPT_DIR/bin" "$BRIDGE_DIR/" 2>/dev/null || true
-    cp "$SCRIPT_DIR/package.json" "$BRIDGE_DIR/" 2>/dev/null || true
+    echo -e "Using local repository at $SCRIPT_DIR..."
+    if [ ! -d "$SCRIPT_DIR/dist" ]; then
+        cd "$SCRIPT_DIR" && npm install && npm run build
+    fi
+    cp -r "$SCRIPT_DIR/dist" "$BRIDGE_DIR/"
+    cp -r "$SCRIPT_DIR/bin" "$BRIDGE_DIR/"
+    cp "$SCRIPT_DIR/package.json" "$BRIDGE_DIR/"
 else
     # Running via curl | bash
-    echo -e "Fetching android-sync from GitHub..."
+    echo -e "Downloading pre-built android-sync-bridge from GitHub..."
     REPO_DIR="$BRIDGE_DIR/repo"
     rm -rf "$REPO_DIR"
     git clone --depth 1 https://github.com/AnmolKamat/Termux-connect.git "$REPO_DIR"
-    cd "$REPO_DIR"
-    echo -e "Setting up runtime dependencies..."
-    npm install --omit=dev 2>/dev/null || npm install
-    npm run build 2>/dev/null || true
+    
+    if [ ! -d "$REPO_DIR/dist" ]; then
+        echo -e "Building runtime..."
+        cd "$REPO_DIR"
+        npm install
+        npm run build
+    fi
+
     cp -r "$REPO_DIR/dist" "$BRIDGE_DIR/"
     cp -r "$REPO_DIR/bin" "$BRIDGE_DIR/"
     cp "$REPO_DIR/package.json" "$BRIDGE_DIR/"
@@ -83,6 +89,8 @@ cat << 'EOF' > "$PREFIX/bin/android-sync-bridge"
 BRIDGE_DIR="$HOME/.android-sync-bridge"
 if [ -f "$BRIDGE_DIR/bin/android-sync-bridge.js" ]; then
     exec node "$BRIDGE_DIR/bin/android-sync-bridge.js" "$@"
+elif [ -f "$BRIDGE_DIR/repo/bin/android-sync-bridge.js" ]; then
+    exec node "$BRIDGE_DIR/repo/bin/android-sync-bridge.js" "$@"
 else
     echo "android-sync-bridge: runtime files not found in $BRIDGE_DIR"
     exit 1
@@ -113,7 +121,7 @@ set -e
 if [ $NOTIF_EXIT -ne 0 ]; then
     echo -e "\n${YELLOW}===================================================================${RESET}"
     echo -e "${YELLOW}[ACTION REQUIRED] Grant Notification Access to Termux:API:${RESET}"
-    echo -e " 1. Install the ${BOLD}Termux:API${RESET} APK from F-Droid (if not installed)."
+    echo -e " 1. Install ${BOLD}Termux:API${RESET} from F-Droid (if not installed)."
     echo -e " 2. Open Android Settings -> Apps -> Special app access -> Notification access."
     echo -e " 3. Enable toggle for ${BOLD}Termux:API${RESET}."
     echo -e "${YELLOW}===================================================================${RESET}\n"
@@ -121,7 +129,7 @@ else
     echo -e "${GREEN}✓ Termux:API notification access verified!${RESET}"
 fi
 
-# Request wake lock to prevent Android from killing background sync
+# Request wake lock to prevent Android from sleeping
 termux-wake-lock 2>/dev/null || true
 
 # Start bridge daemon now
@@ -138,5 +146,5 @@ echo -e "SSH Port:    ${BOLD}${CYAN}8022${RESET}"
 echo -e "SSH User:    ${BOLD}${CYAN}$(whoami)${RESET}"
 echo -e "Daemon Log:  ${BOLD}~/.android-sync-bridge.log${RESET}"
 echo -e "--------------------------------------------------------"
-echo -e "\n${BOLD}To pair with your Mac, run on macOS terminal:${RESET}"
+echo -e "\n${BOLD}Now on your Mac, run:${RESET}"
 echo -e "${CYAN}android-sync devices pair ${LOCAL_IP} 8022${RESET}\n"

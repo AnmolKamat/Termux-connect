@@ -2,6 +2,9 @@
 # ==============================================================================
 # Android ↔ macOS Bridge — macOS Installer Script
 # ==============================================================================
+# Single-command setup for macOS:
+# curl -sSL https://raw.githubusercontent.com/AnmolKamat/Termux-connect/main/scripts/install-mac.sh | bash
+# ==============================================================================
 
 set -e
 
@@ -12,7 +15,7 @@ RED="\033[31m"
 BOLD="\033[1m"
 RESET="\033[0m"
 
-echo -e "${BOLD}${CYAN}=== Android ↔ macOS Bridge Installer (macOS) ===${RESET}\n"
+echo -e "\n${BOLD}${CYAN}=== Android ↔ macOS Bridge Installer (macOS) ===${RESET}\n"
 
 # 1. Verify macOS
 if [[ "$OSTYPE" != "darwin"* ]]; then
@@ -23,7 +26,7 @@ fi
 # 2. Check Node.js
 echo -e "${GREEN}[1/5] Checking Node.js installation...${RESET}"
 if ! command -v node >/dev/null 2>&1; then
-    echo -e "${RED}[ERROR] Node.js is not installed. Please install Node.js (v18+) via Homebrew:${RESET}"
+    echo -e "${RED}[ERROR] Node.js is not installed. Please install Node.js via Homebrew:${RESET}"
     echo -e "  brew install node"
     exit 1
 fi
@@ -54,9 +57,13 @@ fi
 
 cd "$PROJECT_DIR"
 
-echo -e "\n${GREEN}[2/5] Building project TypeScript...${RESET}"
-npm install
-npm run build
+if [ ! -d "$PROJECT_DIR/dist" ]; then
+    echo -e "\n${GREEN}[2/5] Building project TypeScript...${RESET}"
+    npm install
+    npm run build
+else
+    echo -e "\n${GREEN}[2/5] Pre-built runtime verified.${RESET}"
+fi
 
 # 4. Install CLI binary symlink
 echo -e "\n${GREEN}[3/5] Installing android-sync binary...${RESET}"
@@ -71,6 +78,11 @@ fi
 
 ln -sf "$CLI_BIN" "$TARGET_DIR/android-sync"
 echo -e "Linked ${BOLD}android-sync${RESET} to ${CYAN}$TARGET_DIR/android-sync${RESET}"
+
+if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
+    echo -e "${YELLOW}Notice: $TARGET_DIR is not currently in your PATH.${RESET}"
+    echo -e "Add this to your ~/.zshrc if needed: ${CYAN}export PATH=\"\$PATH:$TARGET_DIR\"${RESET}"
+fi
 
 # 5. Initialize config directory and SSH keys
 echo -e "\n${GREEN}[4/5] Initializing ~/.android-sync configuration and SSH keys...${RESET}"
