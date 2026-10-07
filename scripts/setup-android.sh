@@ -37,6 +37,16 @@ chmod 700 "$HOME/.ssh"
 touch "$HOME/.ssh/authorized_keys"
 chmod 600 "$HOME/.ssh/authorized_keys"
 
+# Set SSH password if not set
+echo -e "${YELLOW}Note: Termux has NO default password. You must set one for first-time pairing.${RESET}"
+if [ -e /dev/tty ]; then
+    read -p "Set a password now? (Y/n): " -n 1 -r < /dev/tty || true
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        passwd < /dev/tty || true
+    fi
+fi
+
 # Start sshd if not running
 if ! pgrep -x "sshd" > /dev/null 2>&1; then
     echo -e "${GREEN}[3/6] Starting OpenSSH daemon on port 8022...${RESET}"
@@ -144,6 +154,7 @@ echo -e "--------------------------------------------------------"
 echo -e "Device IP:   ${BOLD}${CYAN}${LOCAL_IP}${RESET}"
 echo -e "SSH Port:    ${BOLD}${CYAN}8022${RESET}"
 echo -e "SSH User:    ${BOLD}${CYAN}$(whoami)${RESET}"
+echo -e "SSH Password: ${BOLD}${YELLOW}Run 'passwd' in Termux if asked during pairing${RESET}"
 echo -e "Daemon Log:  ${BOLD}~/.android-sync-bridge.log${RESET}"
 echo -e "--------------------------------------------------------"
 echo -e "\n${BOLD}Now on your Mac, run:${RESET}"

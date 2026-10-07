@@ -82,6 +82,9 @@ export async function pairDeviceCommand(
 
   const port = options.port || 8022;
 
+  console.log(dim(`\nPairing with Android device at ${host}:${port}...`));
+  console.log(dim(`Note: If prompted for password, enter your Termux password (run 'passwd' on your phone to set/change it).\n`));
+
   try {
     const device = await PairingManager.pairDevice({
       host,
