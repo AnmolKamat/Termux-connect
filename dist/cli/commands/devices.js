@@ -67,6 +67,9 @@ export async function pairDeviceCommand(host, options = {}) {
         user = parts[0];
         host = parts[1];
     }
+    if (!user && process.stdin.isTTY) {
+        user = await UI.prompt('Enter Termux username (run "whoami" in Termux)', 'u0_a440');
+    }
     const port = options.port || 8022;
     console.log(dim(`\nPairing with Android device at ${user ? `${user}@` : ''}${host}:${port}...`));
     console.log(dim(`Note: If prompted for password, enter your Termux password (run 'passwd' on your phone to set/change it).\n`));
