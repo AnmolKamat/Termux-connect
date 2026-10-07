@@ -73,6 +73,7 @@ export interface DiscoveryBeacon {
     model: string;
     ip: string;
     port: number;
+    user?: string;
     capabilities: CapabilityType[];
     version: number;
     timestamp: number;

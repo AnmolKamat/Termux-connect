@@ -6,6 +6,7 @@ export const PROTOCOL_VERSION = 1;
 
 export const DEFAULT_SSH_PORT = 8022;
 export const DEFAULT_UDP_PORT = 8765;
+export const DEFAULT_PAIRING_PORT = 8766;
 export const MDNS_SERVICE_NAME = '_android-sync._tcp';
 
 export const DEFAULT_CONFIG_DIR_NAME = '.android-sync';

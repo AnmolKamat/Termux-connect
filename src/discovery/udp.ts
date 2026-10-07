@@ -10,6 +10,7 @@ export interface DiscoveredDevice {
   model: string;
   host: string;
   port: number;
+  user?: string;
   capabilities: string[];
   source: 'udp' | 'mdns';
 }
@@ -51,6 +52,7 @@ export class UdpScanner extends EventEmitter {
               model: beacon.model || 'Android',
               host: rinfo.address,
               port: beacon.port || DEFAULT_SSH_PORT,
+              user: beacon.user,
               capabilities: (beacon.capabilities as string[]) || ['notifications', 'device'],
               source: 'udp',
             };

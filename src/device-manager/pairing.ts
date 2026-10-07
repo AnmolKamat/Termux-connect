@@ -3,6 +3,7 @@ import { DeviceStore } from './store.js';
 import { runCommand } from '../shared/exec.js';
 import { Logger } from '../shared/logger.js';
 import { PathManager } from '../shared/config.js';
+import { DEFAULT_PAIRING_PORT } from '../protocol/constants.js';
 import type { DeviceRecord, CapabilityType } from '../protocol/types.js';
 
 export interface PairOptions {
@@ -18,7 +19,7 @@ export class PairingManager {
   public static async pairDevice(options: PairOptions): Promise<DeviceRecord> {
     const host = options.host.trim();
     const port = options.port ?? 8022;
-    const user = options.user;
+    let user = options.user;
 
     Logger.info(`Initiating pairing with ${host}:${port}...`);
 
@@ -45,19 +46,45 @@ export class PairingManager {
     }
 
     // 4. Try key-based connection first (in case key was already installed)
-    const testArgs = [
+    const getTestArgs = (u?: string) => [
       '-i', privateKeyPath,
       '-o', `UserKnownHostsFile=${PathManager.getKnownHostsFile()}`,
       '-o', 'StrictHostKeyChecking=accept-new',
       '-o', 'BatchMode=yes',
       '-o', 'ConnectTimeout=5',
       '-p', String(port),
-      ...(user ? [`${user}@${host}`] : [host]),
+      ...(u ? [`${u}@${host}`] : [host]),
       'echo ANDROID_SYNC_OK',
     ];
 
-    let probeResult = await runCommand('ssh', testArgs);
+    let probeResult = await runCommand('ssh', getTestArgs(user));
     let keyInstalled = probeResult.stdout.includes('ANDROID_SYNC_OK');
+
+    if (!keyInstalled) {
+      // 4b. Try seamless local HTTP pairing via android-sync-bridge
+      try {
+        Logger.info(`Attempting seamless local key pairing via bridge (${host}:${DEFAULT_PAIRING_PORT})...`);
+        const pairUrl = `http://${host}:${DEFAULT_PAIRING_PORT}/pair`;
+        const res = await fetch(pairUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ publicKey: publicKeyContent }),
+          signal: AbortSignal.timeout(2500),
+        });
+        if (res.ok) {
+          const resData = (await res.json()) as { success?: boolean; user?: string };
+          if (resData.success) {
+            keyInstalled = true;
+            if (resData.user && !user) {
+              user = resData.user;
+            }
+            Logger.success(`SSH key installed seamlessly on Android (user: ${user || 'default'})!`);
+          }
+        }
+      } catch {
+        Logger.debug('Local HTTP bridge endpoint not reachable, trying standard SSH install...');
+      }
+    }
 
     if (!keyInstalled) {
       // 5. Try installing key via ssh-copy-id
@@ -82,14 +109,14 @@ export class PairingManager {
           }
         }
       }
+    }
 
-      // Re-probe after key installation
-      probeResult = await runCommand('ssh', testArgs);
-      if (!probeResult.stdout.includes('ANDROID_SYNC_OK')) {
-        throw new Error(
-          `SSH key authentication failed for ${host}:${port}. Please verify that the Mac public key is in ~/.ssh/authorized_keys on Termux.`
-        );
-      }
+    // Re-probe after key installation
+    probeResult = await runCommand('ssh', getTestArgs(user));
+    if (!probeResult.stdout.includes('ANDROID_SYNC_OK')) {
+      throw new Error(
+        `SSH key authentication failed for ${host}:${port}. Please verify that the Mac public key is in ~/.ssh/authorized_keys on Termux.`
+      );
     }
 
     // 6. Query device details

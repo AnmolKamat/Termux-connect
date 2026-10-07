@@ -1,11 +1,15 @@
 import * as dgram from 'node:dgram';
+import * as http from 'node:http';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as os from 'node:os';
 import { spawn } from 'node:child_process';
-import { DEFAULT_UDP_PORT, DEFAULT_SSH_PORT, MDNS_SERVICE_NAME, PROTOCOL_VERSION } from '../protocol/constants.js';
+import { DEFAULT_UDP_PORT, DEFAULT_SSH_PORT, DEFAULT_PAIRING_PORT, MDNS_SERVICE_NAME, PROTOCOL_VERSION, } from '../protocol/constants.js';
 import { AndroidSystem } from './system.js';
 import { Logger } from '../shared/logger.js';
 export class AndroidBroadcaster {
     socket = null;
+    pairingServer = null;
     beaconTimer = null;
     mdnsProc = null;
     isRunning = false;
@@ -24,6 +28,14 @@ export class AndroidBroadcaster {
         }
         return '127.0.0.1';
     }
+    getUserName() {
+        try {
+            return os.userInfo().username || process.env.USER || 'u0_a440';
+        }
+        catch {
+            return process.env.USER || 'u0_a440';
+        }
+    }
     async start() {
         if (this.isRunning)
             return;
@@ -31,6 +43,7 @@ export class AndroidBroadcaster {
         const deviceId = await AndroidSystem.getDeviceId();
         const deviceName = await AndroidSystem.getDeviceName();
         const model = await AndroidSystem.getModel();
+        const user = this.getUserName();
         this.socket = dgram.createSocket({ type: 'udp4', reuseAddr: true });
         this.socket.on('error', (err) => {
             Logger.debug(`Broadcaster socket error: ${err.message}`);
@@ -46,6 +59,7 @@ export class AndroidBroadcaster {
                         model,
                         ip: this.getLocalIp(),
                         port: this.port,
+                        user,
                         capabilities: ['notifications', 'device', 'clipboard', 'files'],
                         version: PROTOCOL_VERSION,
                         timestamp: Date.now(),
@@ -79,6 +93,7 @@ export class AndroidBroadcaster {
                     model,
                     ip: this.getLocalIp(),
                     port: this.port,
+                    user,
                     capabilities: ['notifications', 'device', 'clipboard', 'files'],
                     version: PROTOCOL_VERSION,
                     timestamp: Date.now(),
@@ -90,12 +105,64 @@ export class AndroidBroadcaster {
                 // Ignore
             }
         }, 5000);
+        // Start local pairing HTTP endpoint
+        this.startPairingHttpServer();
         // Try starting mDNS via avahi or dns-sd if installed in Termux
         this.startMdns(deviceName);
     }
+    startPairingHttpServer() {
+        try {
+            this.pairingServer = http.createServer((req, res) => {
+                if (req.method === 'POST' && req.url === '/pair') {
+                    let body = '';
+                    req.on('data', (chunk) => { body += chunk; });
+                    req.on('end', () => {
+                        try {
+                            const data = JSON.parse(body);
+                            const pubKey = data.publicKey?.trim();
+                            if (pubKey && pubKey.startsWith('ssh-')) {
+                                const sshDir = path.join(os.homedir(), '.ssh');
+                                if (!fs.existsSync(sshDir)) {
+                                    fs.mkdirSync(sshDir, { recursive: true, mode: 0o700 });
+                                }
+                                const authKeys = path.join(sshDir, 'authorized_keys');
+                                fs.appendFileSync(authKeys, `\n${pubKey}\n`, { mode: 0o600 });
+                                try {
+                                    fs.chmodSync(authKeys, 0o600);
+                                }
+                                catch { /* ignore */ }
+                                const user = this.getUserName();
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                res.end(JSON.stringify({ success: true, user }));
+                                Logger.info(`Accepted SSH public key via local pairing from ${req.socket.remoteAddress}`);
+                                return;
+                            }
+                        }
+                        catch {
+                            // Ignore
+                        }
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'Invalid public key' }));
+                    });
+                }
+                else {
+                    res.writeHead(404);
+                    res.end();
+                }
+            });
+            this.pairingServer.on('error', (err) => {
+                Logger.debug(`Pairing HTTP server error: ${err.message}`);
+            });
+            this.pairingServer.listen(DEFAULT_PAIRING_PORT, () => {
+                Logger.info(`Local pairing endpoint active on port ${DEFAULT_PAIRING_PORT}`);
+            });
+        }
+        catch (err) {
+            Logger.debug(`Failed to start pairing HTTP server: ${err.message}`);
+        }
+    }
     startMdns(serviceName) {
         try {
-            // avahi-publish-service <name> <type> <port>
             this.mdnsProc = spawn('avahi-publish-service', [
                 serviceName,
                 MDNS_SERVICE_NAME,
@@ -114,6 +181,15 @@ export class AndroidBroadcaster {
         if (this.beaconTimer) {
             clearInterval(this.beaconTimer);
             this.beaconTimer = null;
+        }
+        if (this.pairingServer) {
+            try {
+                this.pairingServer.close();
+            }
+            catch {
+                // Ignore
+            }
+            this.pairingServer = null;
         }
         if (this.socket) {
             try {

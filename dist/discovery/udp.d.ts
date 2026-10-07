@@ -5,6 +5,7 @@ export interface DiscoveredDevice {
     model: string;
     host: string;
     port: number;
+    user?: string;
     capabilities: string[];
     source: 'udp' | 'mdns';
 }
